@@ -22,8 +22,8 @@ def download_media():
         
         # Instantiate Instaloader
         loader = instaloader.Instaloader()
-        post = instaloader.Post.from_url(loader.context, url)
-
+        post = loader.get_post_from_url(url)
+        
         photos = []
         videos = []
         reels = []
