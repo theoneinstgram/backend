@@ -1,78 +1,55 @@
-from flask import Flask, request, jsonify, send_from_directory
-from flask_cors import CORS
-import instaloader
-import os
-import requests
+from selenium import webdriver
+from flask import Flask, request, jsonify
+import time
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
 
-# Folder to store downloaded media
-MEDIA_FOLDER = './downloads'
-if not os.path.exists(MEDIA_FOLDER):
-    os.makedirs(MEDIA_FOLDER)
-
-@app.route('/api/download-media', methods=['POST'])
-def download_media():
-    try:
-        url = request.json.get('url')
-        
-        if not url:
-            return jsonify({"error": "URL is required"}), 400
-        
-        # Instantiate Instaloader
-        loader = instaloader.Instaloader()
-
-        # Extract the shortcode from the URL
-        shortcode = url.split("/")[-2]
-        
-        # Get the post from the shortcode
-        post = instaloader.Post.from_shortcode(loader.context, shortcode)
-        
-        # If the post is private, skip it
-        if post.owner_profile.is_private:
-            return jsonify({"error": "The post is from a private account and cannot be accessed."}), 403
-
-        photos = []
-        videos = []
-        reels = []
-        
-        # Check if it's a video or photo post
-        if post.is_video:
-            video_path = os.path.join(MEDIA_FOLDER, f'{post.shortcode}_video.mp4')
-            video_url = post.video_url
-            download_video(video_url, video_path)
-            videos.append(f"/media/{post.shortcode}_video.mp4")
-        else:
-            photo_path = os.path.join(MEDIA_FOLDER, f'{post.shortcode}_photo.jpg')
-            download_photo(post.url, photo_path)
-            photos.append(f"/media/{post.shortcode}_photo.jpg")
-
-        # Handle the media response
-        return jsonify({
-            "photos": photos,
-            "videos": videos,
-            "reels": reels
-        })
+@app.route('/fastdl-download', methods=['POST'])
+def fastdl_download():
+    url = request.json.get('url')
     
+    if not url:
+        return jsonify({"error": "No URL provided"}), 400
+
+    # Initialize Selenium WebDriver (example with Chrome)
+    driver = webdriver.Chrome()
+
+    try:
+        # Visit the FastDL page
+        driver.get('https://fastdl.app/en')
+
+        # Wait for the page to load
+        time.sleep(5)
+
+        # Find the input field for the URL (adjust selector as necessary)
+        input_element = driver.find_element_by_css_selector('input[name="url"]')
+        input_element.send_keys(url)
+
+        # Submit the form (adjust the selector as necessary)
+        submit_button = driver.find_element_by_css_selector('button[type="submit"]')
+        submit_button.click()
+
+        # Wait for the download to complete (adjust this part as necessary)
+        time.sleep(10)
+
+        # Extract the media URLs (you need to adjust the selectors based on FastDL's response)
+        media_urls = []
+        # Example: Find media elements
+        images = driver.find_elements_by_css_selector('.media-image-class')  # Replace with actual selector
+        videos = driver.find_elements_by_css_selector('.media-video-class')  # Replace with actual selector
+
+        for image in images:
+            media_urls.append({"url": image.get_attribute("src"), "type": "image"})
+        
+        for video in videos:
+            media_urls.append({"url": video.get_attribute("src"), "type": "video"})
+
+        return jsonify({"media": media_urls}), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    finally:
+        driver.quit()
 
-def download_video(video_url, path):
-    # Download the video
-    response = requests.get(video_url)
-    with open(path, 'wb') as file:
-        file.write(response.content)
-
-def download_photo(photo_url, path):
-    # Download the photo
-    response = requests.get(photo_url)
-    with open(path, 'wb') as file:
-        file.write(response.content)
-
-@app.route('/media/<filename>')
-def get_media(filename):
-    return send_from_directory(MEDIA_FOLDER, filename)
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run(debug=True)
