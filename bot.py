@@ -76,4 +76,17 @@ def fetch_media():
         return jsonify(media_data), 200
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Use gunicorn to run in production
+    from gunicorn.app.base import BaseApplication
+
+    class GunicornApplication(BaseApplication):
+        def init(self, parser, opts, args):
+            return {
+                'bind': '0.0.0.0:5000',
+                'workers': 2,
+            }
+
+        def load(self):
+            return app
+
+    GunicornApplication(None).run()
