@@ -22,11 +22,17 @@ def download_media():
         
         # Instantiate Instaloader
         loader = instaloader.Instaloader()
-        
+
         # Extract the shortcode from the URL
         shortcode = url.split("/")[-2]
+        
+        # Get the post from the shortcode
         post = instaloader.Post.from_shortcode(loader.context, shortcode)
         
+        # If the post is private, skip it
+        if post.owner_profile.is_private:
+            return jsonify({"error": "The post is from a private account and cannot be accessed."}), 403
+
         photos = []
         videos = []
         reels = []
