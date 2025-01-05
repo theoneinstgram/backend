@@ -1,83 +1,69 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
 import instaloader
+import os
+import requests
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
-# Initialize instaloader
-L = instaloader.Instaloader()
+# Folder to store downloaded media
+MEDIA_FOLDER = './downloads'
+if not os.path.exists(MEDIA_FOLDER):
+    os.makedirs(MEDIA_FOLDER)
 
-# Fetch media from Instagram
-def fetch_instagram_media(url):
+@app.route('/api/download-media', methods=['POST'])
+def download_media():
     try:
-        # Extract shortcode from the URL
-        shortcode = url.split("/")[-2]
-        post = instaloader.Post.from_shortcode(L.context, shortcode)
+        url = request.json.get('url')
+        
+        if not url:
+            return jsonify({"error": "URL is required"}), 400
+        
+        # Instantiate Instaloader
+        loader = instaloader.Instaloader()
+        post = instaloader.Post.from_url(loader.context, url)
 
-        # Separate media into photos, videos, and reels
         photos = []
         videos = []
         reels = []
-
-        # Check if the post is private
-        if post.is_private:
-            return {"error": "The profile is private. Unable to fetch media."}
-
-        # Loop through the media of the post
-        for index, node in enumerate(post.get_posts()):
-            if node.is_video:
-                videos.append({
-                    "url": node.video_url,
-                    "caption": node.caption
-                })
-            else:
-                photos.append({
-                    "url": node.url,
-                    "caption": node.caption
-                })
-
-            # Check if it's a reel (can be differentiated via 'is_video')
-            if hasattr(post, 'is_reel') and post.is_reel:
-                reels.append({
-                    "url": node.url,
-                    "caption": node.caption
-                })
-
-        # Check if we found any media
-        if not photos and not videos and not reels:
-            return {"error": "No media (photos/videos/reels) found."}
         
-        # Return error if no photos, videos, or reels are found
-        if not photos:
-            return {"error": "No photos found."}
-        if not videos:
-            return {"error": "No videos found."}
-        if not reels:
-            return {"error": "No reels found."}
+        # Check if it's a video or photo post
+        if post.is_video:
+            video_path = os.path.join(MEDIA_FOLDER, f'{post.shortcode}_video.mp4')
+            video_url = post.video_url
+            download_video(video_url, video_path)
+            videos.append(f"/media/{post.shortcode}_video.mp4")
+        else:
+            photo_path = os.path.join(MEDIA_FOLDER, f'{post.shortcode}_photo.jpg')
+            download_photo(post.url, photo_path)
+            photos.append(f"/media/{post.shortcode}_photo.jpg")
 
-        return {"photos": photos, "videos": videos, "reels": reels}
-
+        # Handle the media response
+        return jsonify({
+            "photos": photos,
+            "videos": videos,
+            "reels": reels
+        })
+    
     except Exception as e:
-        print(f"Error: {e}")
-        return {"error": "An error occurred while fetching the media."}
+        return jsonify({"error": str(e)}), 500
 
-@app.route('/fetch-media', methods=['POST'])
-def fetch_media():
-    data = request.json
-    instagram_url = data.get("url")
+def download_video(video_url, path):
+    # Download the video
+    response = requests.get(video_url)
+    with open(path, 'wb') as file:
+        file.write(response.content)
 
-    if not instagram_url:
-        return jsonify({"error": "Instagram URL is required"}), 400
+def download_photo(photo_url, path):
+    # Download the photo
+    response = requests.get(photo_url)
+    with open(path, 'wb') as file:
+        file.write(response.content)
 
-    media_data = fetch_instagram_media(instagram_url)
+@app.route('/media/<filename>')
+def get_media(filename):
+    return send_from_directory(MEDIA_FOLDER, filename)
 
-    if 'error' in media_data:
-        return jsonify(media_data), 400
-    else:
-        return jsonify(media_data), 200
-
-@app.route('/')
-def hello_world():
-    return 'Hello, World!'
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)
