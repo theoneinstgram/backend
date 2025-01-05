@@ -1,12 +1,15 @@
-from selenium import webdriver
 from flask import Flask, request, jsonify
+from flask_cors import CORS  # Import CORS module
+from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 
 app = Flask(__name__)
+
+# Enable CORS for all routes
+CORS(app, resources={r"/*": {"origins": "https://frontend-4zgb.onrender.com"}})
 
 @app.route('/fastdl-download', methods=['POST'])
 def fastdl_download():
