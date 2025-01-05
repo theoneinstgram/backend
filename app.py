@@ -22,7 +22,10 @@ def download_media():
         
         # Instantiate Instaloader
         loader = instaloader.Instaloader()
-        post = loader.get_post_from_url(url)
+        
+        # Extract the shortcode from the URL
+        shortcode = url.split("/")[-2]
+        post = instaloader.Post.from_shortcode(loader.context, shortcode)
         
         photos = []
         videos = []
